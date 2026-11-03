@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Jumpstart"
+description = "A friendly map-based community jump-start service connecting stranded drivers with nearby willing helpers. Includes GPS, price agreement, success-only simulated payments, and five switchable demo users."
+version = "1.0.0"
+id = "artifacts/jumpstart"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22576
+
+[services.development]
+run = "pnpm --filter @workspace/jumpstart run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jumpstart", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jumpstart/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22576"
+BASE_PATH = "/"

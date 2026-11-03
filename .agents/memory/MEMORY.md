@@ -1,0 +1,1 @@
+- [Demo scope and launch defaults](demo-scope.md) — test payments approved; launch location, currency, and fee rate still need business confirmation.

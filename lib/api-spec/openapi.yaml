@@ -11,6 +11,83 @@ tags:
   - name: health
     description: Health operations
 paths:
+  /jumpstart/state:
+    get:
+      operationId: getJumpstartState
+      tags: [jumpstart]
+      summary: All five demo users, requests, and success-only payment summary
+      responses:
+        "200":
+          description: Demo workspace state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JumpstartState" }
+  /jumpstart/helpers:
+    get:
+      operationId: getNearbyHelpers
+      tags: [jumpstart]
+      parameters:
+        - { name: userId, in: query, required: true, schema: { type: string } }
+        - { name: lat, in: query, required: true, schema: { type: number, minimum: -90, maximum: 90 } }
+        - { name: lng, in: query, required: true, schema: { type: number, minimum: -180, maximum: 180 } }
+        - { name: radius, in: query, schema: { type: number, default: 20, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: Available helpers ordered by real straight-line distance
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NearbyHelper" }
+  /jumpstart/users/{id}:
+    patch:
+      operationId: updateDemoUser
+      tags: [jumpstart]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DemoUserUpdate" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DemoUser" }
+  /jumpstart/jobs:
+    post:
+      operationId: createJumpstartJob
+      tags: [jumpstart]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JumpstartJobInput" }
+      responses:
+        "201":
+          description: Request sent; helper must explicitly accept price
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JumpstartJob" }
+  /jumpstart/jobs/{id}/action:
+    post:
+      operationId: actOnJumpstartJob
+      tags: [jumpstart]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobActionInput" }
+      responses:
+        "200":
+          description: Updated request, with simulated charge only on driver's success confirmation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JumpstartJob" }
   /healthz:
     get:
       operationId: healthCheck
@@ -26,6 +103,96 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 components:
   schemas:
+    DemoUser:
+      type: object
+      required: [id, name, initials, color, vehicle, equipment, available, lat, lng, locationLabel, price, rating, completedHelps]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        initials: { type: string }
+        color: { type: string }
+        vehicle: { type: string }
+        equipment: { type: string, enum: [jump_pack, jumper_cables] }
+        available: { type: boolean }
+        lat: { type: number }
+        lng: { type: number }
+        locationLabel: { type: string }
+        price: { type: number }
+        rating: { type: number }
+        completedHelps: { type: integer }
+    DemoUserUpdate:
+      type: object
+      properties:
+        available: { type: boolean }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        locationLabel: { type: string, minLength: 1, maxLength: 160 }
+        price: { type: number, minimum: 10, maximum: 500 }
+        equipment: { type: string, enum: [jump_pack, jumper_cables] }
+        vehicle: { type: string, minLength: 1, maxLength: 100 }
+    NearbyHelper:
+      type: object
+      required: [user, distanceKm, estimatedMinutes]
+      properties:
+        user: { $ref: "#/components/schemas/DemoUser" }
+        distanceKm: { type: number }
+        estimatedMinutes: { type: integer }
+    JumpstartJobInput:
+      type: object
+      required: [requesterId, helperId, lat, lng, locationLabel, agreedPrice]
+      properties:
+        requesterId: { type: string }
+        helperId: { type: string }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        locationLabel: { type: string, minLength: 1, maxLength: 160 }
+        notes: { type: string, maxLength: 500 }
+        agreedPrice: { type: number, minimum: 10, maximum: 500 }
+    JobActionInput:
+      type: object
+      required: [actorId, action]
+      properties:
+        actorId: { type: string }
+        action: { type: string, enum: [accept, decline, arrive, complete, fail, cancel] }
+    JumpstartJob:
+      type: object
+      required: [id, requesterId, helperId, lat, lng, locationLabel, notes, status, price, platformFee, helperEarnings, paymentStatus, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        requesterId: { type: string }
+        helperId: { type: string }
+        lat: { type: number }
+        lng: { type: number }
+        locationLabel: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [pending, accepted, arrived, completed, failed, cancelled, declined] }
+        price: { type: number }
+        platformFee: { type: number }
+        helperEarnings: { type: number }
+        paymentStatus: { type: string, enum: [not_charged, simulated_paid] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    JumpstartSummary:
+      type: object
+      required: [availableHelpers, successfulJobs, totalFees, currency, feePercent, paymentMode]
+      properties:
+        availableHelpers: { type: integer }
+        successfulJobs: { type: integer }
+        totalFees: { type: number }
+        currency: { type: string }
+        feePercent: { type: number }
+        paymentMode: { type: string, enum: [test] }
+    JumpstartState:
+      type: object
+      required: [users, jobs, summary]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/DemoUser" }
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/JumpstartJob" }
+        summary: { $ref: "#/components/schemas/JumpstartSummary" }
     HealthStatus:
       type: object
       properties:
