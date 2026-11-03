@@ -1,0 +1,50 @@
+[
+  {
+    "id": "4f8c202d-7a15-4f6a-a564-c7b5915a36d0",
+    "position": 1,
+    "filepath": "src/pages/slides/Jumpstart.tsx",
+    "title": "Jumpstart",
+    "description": "A nearby helping hand for a car that won’t start. Two roles, five test users, and test payments only.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "39e3799f-a0fb-4a24-a24a-c88475f6b98a",
+    "position": 2,
+    "filepath": "src/pages/slides/Problem.tsx",
+    "title": "A dead battery needs a nearby solution",
+    "description": "The driver’s problem and the nearby people equipped to help.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "92488019-d5b3-4d26-85c3-adb8a080cf64",
+    "position": 3,
+    "filepath": "src/pages/slides/Journey.tsx",
+    "title": "From a location pin to a successful start",
+    "description": "The five-step journey from sharing a location to driver-confirmed success.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "4c99c701-9186-4dcb-a62e-2e92350bbf08",
+    "position": 4,
+    "filepath": "src/pages/slides/FeeModel.tsx",
+    "title": "A fee only when the car starts",
+    "description": "Success-only test payments, the AED 50 example, and the unconfirmed commercial defaults.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "477ee7dc-4b22-4aad-adf0-608767dc3c74",
+    "position": 5,
+    "filepath": "src/pages/slides/WorkingDemo.tsx",
+    "title": "A working demo of both sides",
+    "description": "Existing features and a clearly labelled screenshot of the working Jumpstart demo.",
+    "speakerNotes": ""
+  },
+  {
+    "id": "db7493fa-bea8-4c1c-9795-ab301aa3d029",
+    "position": 6,
+    "filepath": "src/pages/slides/LiveService.tsx",
+    "title": "From demo to a live service",
+    "description": "The distinction between the working demo and the accounts, payments, and operating decisions needed before live service.",
+    "speakerNotes": ""
+  }
+]

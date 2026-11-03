@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/jumpstart-overview/"
+title = "Jumpstart — Project Overview"
+description = "A six-slide project overview of Jumpstart, covering the roadside problem, driver/helper journey, success-only test-payment model, working demo and prerequisites for a live service. Uses the approved copy and Analytics Dashboard visual theme."
+version = "1.0.0"
+id = "artifacts/jumpstart-overview"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/jumpstart-overview/" ]
+localPort = 19604
+
+[services.development]
+run = "pnpm --filter @workspace/jumpstart-overview run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jumpstart-overview", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jumpstart-overview/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19604"
+BASE_PATH = "/jumpstart-overview/"
