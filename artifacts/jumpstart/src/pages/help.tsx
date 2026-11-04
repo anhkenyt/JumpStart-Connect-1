@@ -1,24 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { Cable, Inbox, Zap } from "lucide-react";
-import { useUpdateDemoUser, type DemoUserEquipment } from "@workspace/api-client-react";
+import { useActOnJumpstartJob, useUpdateDemoUser, type DemoUserEquipment } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Page } from "@/components/shell";
 import { MapView } from "@/components/map-view";
 import { JobCard } from "@/components/job-card";
-import { Breakdown, SafetyNote, Skel, TestPill } from "@/components/bits";
+import { Breakdown, SafetyNote, Skel, TestPill, UserDot } from "@/components/bits";
 import { useDemo, errMsg, feeFor, isActive } from "@/lib/demo";
 import { useGps } from "@/lib/geo";
 import { ErrorBox } from "@/pages/find";
 
 export default function HelpPage() {
-  const { state, me, userId, invalidate, isLoading, isError, refetch } = useDemo();
+  const { state, me, userId, userById, invalidate, isLoading, isError, refetch } = useDemo();
   const { toast } = useToast();
   const update = useUpdateDemoUser();
+  const act = useActOnJumpstartJob();
   const [form, setForm] = useState({ vehicle: "", price: "40", equipment: "jumper_cables" as DemoUserEquipment, lat: 0, lng: 0, locationLabel: "" });
+  const [promptJobId, setPromptJobId] = useState<string | null>(null);
   const initFor = useRef<string | null>(null);
+  const seenRequestIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (me && initFor.current !== me.id) {
@@ -32,6 +36,15 @@ export default function HelpPage() {
   const priceN = Number(form.price);
   const priceOk = Number.isFinite(priceN) && priceN >= 10 && priceN <= 500;
   const incoming = (state?.jobs ?? []).filter((j) => j.helperId === userId && isActive(j)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const promptedJob = incoming.find((job) => job.id === promptJobId && job.status === "pending");
+  const requester = promptedJob ? userById(promptedJob.requesterId) : undefined;
+
+  useEffect(() => {
+    const nextRequest = incoming.find((job) => job.status === "pending" && !seenRequestIds.current.has(job.id));
+    if (!nextRequest) return;
+    seenRequestIds.current.add(nextRequest.id);
+    setPromptJobId(nextRequest.id);
+  }, [incoming]);
 
   const save = (data: Parameters<typeof update.mutate>[0]["data"], msg: string) =>
     update.mutate({ id: userId, data }, {
@@ -39,12 +52,95 @@ export default function HelpPage() {
       onError: (e) => toast({ title: "Couldn't save", description: errMsg(e), variant: "destructive" }),
     });
 
+  const respondToRequest = (action: "accept" | "decline") => {
+    if (!promptedJob) return;
+    act.mutate(
+      { id: promptedJob.id, data: { actorId: userId, action } },
+      {
+        onSuccess: () => {
+          invalidate();
+          setPromptJobId(null);
+          toast({
+            title: action === "accept" ? "Request accepted" : "Request declined",
+            description: action === "accept" ? "Head over safely. No payment is recorded yet." : "No charge to anyone.",
+          });
+        },
+        onError: (error) => toast({ title: "Couldn't update the request", description: errMsg(error), variant: "destructive" }),
+      },
+    );
+  };
+
   if (isError) return <Page><ErrorBox onRetry={refetch} /></Page>;
   if (isLoading || !me) return <Page><Skel className="h-10 w-60" /><Skel className="mt-6 h-40" /><Skel className="mt-4 h-72" /></Page>;
 
   const f = feeFor(priceOk ? priceN : 0, pct);
   return (
     <Page>
+      <Dialog
+        open={Boolean(promptedJob)}
+        onOpenChange={(open) => { if (!open) setPromptJobId(null); }}
+      >
+        <DialogContent className="max-h-[85dvh] overflow-y-auto rounded-2xl sm:max-w-md">
+          {promptedJob && (
+            <>
+              <DialogHeader>
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <TestPill>Demo request · no payment now</TestPill>
+                </div>
+                <DialogTitle className="font-display text-xl">New request for you</DialogTitle>
+                <DialogDescription>
+                  Review the driver and agreed quote. Accept if you’re ready to help.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-3">
+                <UserDot user={requester} size={42} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{requester?.name ?? "Driver"}</p>
+                  <p className="truncate text-sm text-muted-foreground">{promptedJob.locationLabel}</p>
+                </div>
+              </div>
+
+              {promptedJob.notes && (
+                <p className="rounded-xl border border-border p-3 text-sm text-muted-foreground">
+                  Driver’s note: {promptedJob.notes}
+                </p>
+              )}
+
+              <Breakdown
+                price={promptedJob.price}
+                fee={promptedJob.platformFee}
+                payout={promptedJob.helperEarnings}
+                pct={pct}
+                perspective="helper"
+              />
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Accepting confirms the quote. No payment is recorded unless the driver confirms the car started.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  data-testid="dialog-accept-request"
+                  className="flex-1 rounded-full"
+                  disabled={act.isPending}
+                  onClick={() => respondToRequest("accept")}
+                >
+                  {act.isPending ? "Responding…" : `Accept for AED ${promptedJob.price}`}
+                </Button>
+                <Button
+                  data-testid="dialog-decline-request"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={act.isPending}
+                  onClick={() => respondToRequest("decline")}
+                >
+                  Decline
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <h1 className="font-display text-3xl font-bold">Help a neighbor</h1>
       <p className="mt-1 text-muted-foreground">Have cables and a running car, or a charged jump pack? Set your quote and you'll appear on the map.</p>
 
