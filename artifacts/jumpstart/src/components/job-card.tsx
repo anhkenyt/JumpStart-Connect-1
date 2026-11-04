@@ -84,7 +84,7 @@ export function JobCard({ job }: { job: JumpstartJob }) {
           </Button>
         )}
         {job.status === "arrived" && amHelper && (
-          <p className="text-xs text-muted-foreground">Only the driver can confirm the car started. Payment is captured (test) only then.</p>
+          <p className="text-xs text-muted-foreground">If the jump worked, finish the demo job here. This records a simulated payment only.</p>
         )}
 
         <div className="flex flex-wrap gap-2">
@@ -103,6 +103,16 @@ export function JobCard({ job }: { job: JumpstartJob }) {
               </Button>
               <Button data-testid="button-helper-cancel" disabled={busy} variant="outline" className="rounded-full" onClick={() => run("cancel", "Cancelled. No charge.")}>Can't make it</Button>
             </>
+          )}
+          {amHelper && job.status === "arrived" && (
+            <Button
+              data-testid="button-helper-complete"
+              disabled={busy}
+              className="flex-1 rounded-full"
+              onClick={() => run("complete", "Jump-start successful. Test payment recorded.")}
+            >
+              <Check className="mr-1.5 h-4 w-4" /> Finish successfully
+            </Button>
           )}
           {amRequester && job.status === "arrived" && (
             <>

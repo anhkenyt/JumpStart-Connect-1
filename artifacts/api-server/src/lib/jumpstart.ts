@@ -134,7 +134,7 @@ export function actOnJob(data: DemoData, id: string, input: ActionInput): Job {
   if (!driver && !helper) throw new DemoError(403, "Only the driver and chosen helper can update this request.");
   const { action } = input;
   if (["accept", "decline", "arrive"].includes(action) && !helper) throw new DemoError(403, "Switch to the chosen helper to do this.");
-  if (["complete", "fail"].includes(action) && !driver) throw new DemoError(403, "Only the driver can confirm the outcome.");
+  if (action === "fail" && !driver) throw new DemoError(403, "Only the driver can report an unsuccessful jump-start.");
 
   const targets: Record<ActionInput["action"], Job["status"]> = {
     accept: "accepted", decline: "declined", arrive: "arrived", complete: "completed", fail: "failed", cancel: "cancelled",

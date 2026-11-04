@@ -14,3 +14,9 @@ Dubai, AED, and a 10% platform fee deducted from the helper payout are demo defa
 **Why:** The user specified success-only fees but did not specify a city, currency, fee rate, or whether the fee is added or deducted.
 
 **How to apply:** Confirm these business settings before transitioning from the demo to real operations.
+
+In the demo, a helper may mark an arrived jump as successful, which records a simulated payment and fee. Do not use helper confirmation alone to authorize real payments.
+
+**Why:** The user asked for a one-sided helper completion step to make successful demo outcomes easy to show.
+
+**How to apply:** Keep this shortcut in the test-only flow. Require driver confirmation before any real charge.
