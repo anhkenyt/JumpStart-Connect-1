@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Activity, BatteryCharging, ChevronDown, HandHelping, Info, Map as MapIcon } from "lucide-react";
+import { Activity, BatteryCharging, ChartNoAxesCombined, ChevronDown, HandHelping, Info, Map as MapIcon } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/help", label: "Help others", icon: HandHelping },
   { href: "/how-it-works", label: "How it works", icon: Info },
+  { href: "/admin", label: "Admin", icon: ChartNoAxesCombined },
 ];
 
 export function UserSwitcher() {
@@ -70,7 +71,7 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="ml-auto"><UserSwitcher /></div>
       </header>
       <main className="relative min-h-0 flex-1 overflow-hidden">{children}</main>
-      <nav className="z-20 grid shrink-0 grid-cols-4 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="z-20 grid shrink-0 grid-cols-5 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden">
         {NAV.map((n) => {
           const on = loc === n.href;
           return (

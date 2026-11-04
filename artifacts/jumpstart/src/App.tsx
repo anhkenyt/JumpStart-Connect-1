@@ -11,6 +11,7 @@ import FindPage from '@/pages/find';
 import ActivityPage from '@/pages/activity';
 import HelpPage from '@/pages/help';
 import HowPage from '@/pages/how';
+import AdminPage from '@/pages/admin';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } } });
 
@@ -23,6 +24,7 @@ function Router() {
           <Route path="/activity" component={ActivityPage} />
           <Route path="/help" component={HelpPage} />
           <Route path="/how-it-works" component={HowPage} />
+          <Route path="/admin" component={AdminPage} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
