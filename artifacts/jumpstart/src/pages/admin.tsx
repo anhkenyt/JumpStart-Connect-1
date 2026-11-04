@@ -1,21 +1,99 @@
+import { useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Page } from "@/components/shell";
 import { Skel } from "@/components/bits";
 import { StatusChip } from "@/components/job-card";
 import { useDemo, aed } from "@/lib/demo";
-import { ArrowRight, BadgeCheck, Clock3, Receipt, Wallet, XCircle } from "lucide-react";
+import { ArrowRight, BadgeCheck, Clock3, Download, Receipt, Wallet, XCircle } from "lucide-react";
+
+type FeeOutcome = "all" | "earned" | "pending" | "estimate" | "no_fee";
+
+const NO_FEE_STATUSES = ["declined", "cancelled", "failed"];
+
+function feeOutcome(status: string): Exclude<FeeOutcome, "all"> {
+  if (status === "completed") return "earned";
+  if (status === "accepted" || status === "arrived") return "pending";
+  if (status === "pending") return "estimate";
+  return "no_fee";
+}
+
+function feeOutcomeLabel(status: string) {
+  const outcome = feeOutcome(status);
+  if (outcome === "earned") return "Earned";
+  if (outcome === "pending") return "Pending fee";
+  if (outcome === "estimate") return "Fee estimate";
+  return "No fee";
+}
+
+function csvCell(value: string | number) {
+  const text = String(value);
+  const safeText = typeof value === "string" && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return `"${safeText.replace(/"/g, '""')}"`;
+}
 
 export default function AdminPage() {
   const { state, isLoading, isError, refetch, userById } = useDemo();
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState<FeeOutcome>("all");
   const jobs = state?.jobs ?? [];
-  const waitingOnSuccess = jobs
+  const validDateRange = !startDate || !endDate || startDate <= endDate;
+  const filteredJobs = validDateRange
+    ? jobs.filter((job) => {
+        const timestamp = new Date(job.updatedAt).getTime();
+        if (startDate && timestamp < new Date(`${startDate}T00:00:00`).getTime()) return false;
+        if (endDate) {
+          const endExclusive = new Date(`${endDate}T00:00:00`);
+          endExclusive.setDate(endExclusive.getDate() + 1);
+          if (timestamp >= endExclusive.getTime()) return false;
+        }
+        return outcomeFilter === "all" || feeOutcome(job.status) === outcomeFilter;
+      })
+    : [];
+  const orderedJobs = [...filteredJobs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const waitingOnSuccess = filteredJobs
     .filter((job) => job.status === "accepted" || job.status === "arrived")
     .reduce((total, job) => total + job.platformFee, 0);
-  const completedJobs = jobs.filter((job) => job.status === "completed");
-  const noFeeJobs = jobs.filter((job) => ["declined", "cancelled", "failed"].includes(job.status));
-  const orderedJobs = [...jobs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const estimatedFees = filteredJobs
+    .filter((job) => job.status === "pending")
+    .reduce((total, job) => total + job.platformFee, 0);
+  const completedJobs = filteredJobs.filter((job) => job.status === "completed");
+  const earnedFees = completedJobs.reduce((total, job) => total + job.platformFee, 0);
+  const noFeeJobs = filteredJobs.filter((job) => NO_FEE_STATUSES.includes(job.status));
+
+  function downloadLedger() {
+    const headers = [
+      "Job ID",
+      "Driver quote (AED)",
+      "Platform fee (AED)",
+      "Helper payout (AED)",
+      "Status",
+      "Fee outcome",
+      "Timestamp",
+    ];
+    const rows = orderedJobs.map((job) => [
+      job.id,
+      job.price.toFixed(2),
+      job.platformFee.toFixed(2),
+      job.helperEarnings.toFixed(2),
+      job.status,
+      feeOutcomeLabel(job.status),
+      job.updatedAt,
+    ]);
+    const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `fee-ledger_${startDate || "all"}_to_${endDate || "all"}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 
   if (isLoading) {
     return (
@@ -53,10 +131,10 @@ export default function AdminPage() {
         </span>
       </div>
 
-      <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Fee summary">
+      <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5" aria-label="Fee summary for selected filters">
         <SummaryCard
           label="Fees earned"
-          value={aed(state.summary.totalFees)}
+          value={aed(earnedFees)}
           detail="Successful jumps only"
           icon={<Wallet className="h-4 w-4" />}
           testId="text-fees-earned"
@@ -64,9 +142,16 @@ export default function AdminPage() {
         <SummaryCard
           label="Pending fee"
           value={aed(waitingOnSuccess)}
-          detail="Accepted jobs; not earned"
+          detail="Accepted or arrived; not earned"
           icon={<Clock3 className="h-4 w-4" />}
           testId="text-fees-pending"
+        />
+        <SummaryCard
+          label="Fee estimates"
+          value={aed(estimatedFees)}
+          detail="Awaiting helper acceptance"
+          icon={<Receipt className="h-4 w-4" />}
+          testId="text-fees-estimated"
         />
         <SummaryCard
           label="Successful jumps"
@@ -85,22 +170,84 @@ export default function AdminPage() {
       </section>
 
       <section className="mt-8" aria-labelledby="fee-ledger-heading">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <h2 id="fee-ledger-heading" className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Job fee ledger</h2>
             <p className="mt-1 text-xs text-muted-foreground">The fee is 10% of the helper’s agreed quote. It is counted as earned only after a successful start.</p>
           </div>
-          <Link href="/activity" className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline" data-testid="link-admin-activity">
-            Activity <ArrowRight className="h-4 w-4" />
-          </Link>
+          <div className="flex shrink-0 items-center gap-4">
+            <Link href="/activity" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" data-testid="link-admin-activity">
+              Activity <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Button
+              className="rounded-full"
+              onClick={downloadLedger}
+              disabled={orderedJobs.length === 0}
+              data-testid="button-export-fee-ledger"
+            >
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+          </div>
         </div>
 
-        {orderedJobs.length === 0 ? (
+        <div className="mb-4 grid gap-3 rounded-2xl border border-card-border bg-card p-4 sm:grid-cols-3">
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            From date
+            <Input
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(event) => setStartDate(event.target.value)}
+              aria-label="Filter from date"
+              data-testid="input-fee-start-date"
+            />
+          </label>
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            To date
+            <Input
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(event) => setEndDate(event.target.value)}
+              aria-label="Filter to date"
+              data-testid="input-fee-end-date"
+            />
+          </label>
+          <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+            Job outcome
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={outcomeFilter}
+              onChange={(event) => setOutcomeFilter(event.target.value as FeeOutcome)}
+              aria-label="Filter by job outcome"
+              data-testid="select-fee-outcome"
+            >
+              <option value="all">All outcomes</option>
+              <option value="earned">Earned · completed</option>
+              <option value="pending">Pending · accepted or arrived</option>
+              <option value="estimate">Estimate · awaiting acceptance</option>
+              <option value="no_fee">No fee · failed, declined, or cancelled</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
+          <p>{validDateRange ? `Showing ${orderedJobs.length} of ${jobs.length} jobs` : "Start date must be on or before the end date"}</p>
+          <p>Summary reflects the selected dates and outcome.</p>
+        </div>
+
+        {jobs.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-6 text-center" data-testid="admin-empty-ledger">
             <Receipt className="mx-auto h-8 w-8 text-muted-foreground" />
             <p className="mt-3 font-semibold">No requests yet</p>
             <p className="mt-1 text-sm text-muted-foreground">Demo fees will appear here when drivers request help.</p>
             <Button asChild className="mt-4 rounded-full"><Link href="/">Open the map</Link></Button>
+          </div>
+        ) : orderedJobs.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-6 text-center" data-testid="admin-no-filtered-jobs">
+            <Receipt className="mx-auto h-8 w-8 text-muted-foreground" />
+            <p className="mt-3 font-semibold">{validDateRange ? "No jobs match these filters" : "Check the selected date range"}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Change the dates or outcome to see fee history.</p>
           </div>
         ) : (
           <ul className="space-y-3">
