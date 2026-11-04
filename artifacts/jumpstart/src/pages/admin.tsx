@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import { useActOnJumpstartJob } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Page } from "@/components/shell";
 import { Skel } from "@/components/bits";
 import { StatusChip } from "@/components/job-card";
-import { useDemo, aed } from "@/lib/demo";
+import { useToast } from "@/hooks/use-toast";
+import { useDemo, aed, errMsg } from "@/lib/demo";
 import { ArrowRight, BadgeCheck, Clock3, Download, Receipt, Wallet, XCircle } from "lucide-react";
 
 type FeeOutcome = "all" | "earned" | "pending" | "estimate" | "no_fee";
@@ -35,10 +37,13 @@ function csvCell(value: string | number) {
 }
 
 export default function AdminPage() {
-  const { state, isLoading, isError, refetch, userById } = useDemo();
+  const { state, isLoading, isError, refetch, userById, setUserId, invalidate } = useDemo();
+  const { toast } = useToast();
+  const acceptJob = useActOnJumpstartJob();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState<FeeOutcome>("all");
+  const [respondingJobId, setRespondingJobId] = useState<string | null>(null);
   const jobs = state?.jobs ?? [];
   const validDateRange = !startDate || !endDate || startDate <= endDate;
   const filteredJobs = validDateRange
@@ -93,6 +98,27 @@ export default function AdminPage() {
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function acceptAsHelper(job: (typeof jobs)[number]) {
+    setRespondingJobId(job.id);
+    acceptJob.mutate(
+      { id: job.id, data: { actorId: job.helperId, action: "accept" } },
+      {
+        onSuccess: () => {
+          invalidate();
+          setRespondingJobId(null);
+          toast({
+            title: `Accepted as ${userById(job.helperId)?.name ?? "helper"}`,
+            description: "The fee is still pending until the driver confirms a successful start.",
+          });
+        },
+        onError: (error) => {
+          setRespondingJobId(null);
+          toast({ title: "Couldn't accept the request", description: errMsg(error), variant: "destructive" });
+        },
+      },
+    );
   }
 
   if (isLoading) {
@@ -288,6 +314,45 @@ export default function AdminPage() {
                   >
                     {feeState}
                   </p>
+                  {job.status === "pending" && (
+                    <div className="mt-3">
+                      <Button
+                        data-testid={`button-demo-accept-${job.id}`}
+                        size="sm"
+                        className="rounded-full"
+                        disabled={acceptJob.isPending}
+                        onClick={() => acceptAsHelper(job)}
+                      >
+                        {respondingJobId === job.id ? "Accepting…" : `Accept as ${helper?.name ?? "helper"}`}
+                      </Button>
+                      <p className="mt-1.5 text-xs text-muted-foreground">Demo action: accepts this request as the selected helper.</p>
+                    </div>
+                  )}
+                  {job.status === "accepted" && (
+                    <Button
+                      data-testid={`link-demo-helper-${job.id}`}
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 rounded-full"
+                    >
+                      <Link href="/help" onClick={() => setUserId(job.helperId)}>
+                        Continue as {helper?.name ?? "helper"} · mark arrived
+                      </Link>
+                    </Button>
+                  )}
+                  {job.status === "arrived" && (
+                    <Button
+                      data-testid={`link-demo-driver-${job.id}`}
+                      asChild
+                      size="sm"
+                      className="mt-3 rounded-full"
+                    >
+                      <Link href="/activity" onClick={() => setUserId(job.requesterId)}>
+                        Continue as {driver?.name ?? "driver"} · confirm result
+                      </Link>
+                    </Button>
+                  )}
                 </li>
               );
             })}
